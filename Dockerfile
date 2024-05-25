@@ -1,4 +1,4 @@
-ARG GO_VERSION=1.21
+ARG GO_VERSION=1.21.10
 
 FROM ghcr.io/loong64/golang:${GO_VERSION}-trixie as builder
 
