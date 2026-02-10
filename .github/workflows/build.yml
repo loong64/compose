@@ -7,14 +7,13 @@ on:
 
 jobs:
   check-binaries:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     strategy:
       matrix:
         app: [compose]
         repo: ['docker/compose']
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v6
 
       - name: Get Version
         run: |
@@ -72,7 +71,7 @@ jobs:
           APP_VERSION=$(curl -s "https://api.github.com/repos/${{ matrix.repo }}/releases/latest" | jq -r .tag_name)
           echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.APP_VERSION }}
         
@@ -94,8 +93,19 @@ jobs:
       - name: Upgrade Release
         if : steps.create-binaries.outputs.create == '1'
         run: |
+          mkdir -p dist
           docker run --rm -v $(pwd)/dist:/dist ${{ matrix.app }}-static-loong64:${{ env.APP_VERSION }}
-          ls -al dist
+          cd dist
+          find . -type f -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# \*\./# *#' > $RUNNER_TEMP/checksums.txt
+          shasum -a 256 -U -c $RUNNER_TEMP/checksums.txt
+          mv $RUNNER_TEMP/checksums.txt .
+          cat checksums.txt | while read sum file; do
+            if [[ "${file#\*}" == docker-compose-* && "${file#\*}" != *.provenance.json && "${file#\*}" != *.sbom.json && "${file#\*}" != *.sigstore.json ]]; then
+              echo "$sum $file" > ${file#\*}.sha256
+            fi
+          done
+          cd ..
+          ls -al dist/
           gh release upload ${{ env.APP_VERSION }} -R ${{ github.repository }} dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

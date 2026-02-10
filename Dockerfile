@@ -14,24 +14,13 @@ RUN set -ex; \
 
 WORKDIR /opt/compose
 
-ENV GOFLAGS=-mod=vendor \
-    CGO_ENABLED=0
+ENV CGO_ENABLED=0
 
 RUN set -ex; \
     go mod download -x; \
-    go mod tidy; \
-    go mod vendor; \
-    PKG=github.com/docker/compose/v2 VERSION=$(git describe --match 'v[0-9]*' --dirty='.m' --always --tags); \
-    echo "-X ${PKG}/internal.Version=${VERSION}" | tee /tmp/.ldflags; \
-    echo -n "${VERSION}" | tee /tmp/.version
-
-RUN set -ex; \
-    mkdir /opt/compose/dist; \
-    go build -trimpath -tags "$BUILD_TAGS" -ldflags "$(cat /tmp/.ldflags) -w -s" -o /opt/compose/dist/docker-compose ./cmd; \
+    make build GO_BUILDTAGS="e2e" DESTDIR=./dist; \
     cd /opt/compose/dist; \
-    mv docker-compose docker-compose-linux-$(uname -m); \
-    sha256sum docker-compose-linux-loongarch64 > /tmp/checksums.txt; \
-    cat /tmp/checksums.txt | while read sum file; do echo "$sum *$file" > ${file#\*}.sha256; done
+    mv docker-compose docker-compose-linux-$(uname -m)
 
 FROM ghcr.io/loong64/debian:trixie-slim
 
